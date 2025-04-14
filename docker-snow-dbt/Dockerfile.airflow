@@ -1,0 +1,24 @@
+FROM apache/airflow:2.8.2-python3.9
+
+USER root
+
+RUN sudo apt-get update \
+    && apt-get install -y --no-install-recommends \
+    git \
+    gcc \
+    python3-distutils
+
+USER airflow
+
+# We've had issues disabling poetry venv
+# See: https://github.com/python-poetry/poetry/issues/1214
+ENV DBT_PROFILES_DIR=/data_pipeline_s3
+
+RUN python -m pip install --upgrade pip
+
+# Setup dbt for the example project
+RUN pip install dbt-airflow==2.1.0 dbt-snowflake==1.5.0
+
+COPY --chown=airflow:root ./dags /opt/airflow/dags
+
+CMD ["dbt", "--version"]

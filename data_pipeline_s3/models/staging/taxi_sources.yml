@@ -1,0 +1,6 @@
+sources:
+  - name: taxi_event_sources
+    database: taxi_db
+    schema: taxi_schema
+    tables:
+      - name: taxi_event

@@ -1,0 +1,64 @@
+// Initialize database and schema
+USE ROLE ACCOUNTADMIN;
+USE WAREHOUSE COMPUTE_WH;
+CREATE OR REPLACE DATABASE TAXI_DB;
+CREATE OR REPLACE SCHEMA TAXI_SCHEMA;
+
+CREATE OR REPLACE TABLE TAXI_EVENT (
+TAXI_EVENT VARIANT,
+DT_INGESTION_TIMESTAMP TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+);
+
+// S3 Configuration
+CREATE OR REPLACE STORAGE INTEGRATION s3_snowpipe_int_pro
+    TYPE = EXTERNAL_STAGE
+    STORAGE_PROVIDER = 'S3'
+    ENABLED = TRUE
+    STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::313448402405:role/snowpipe_taxi_project'
+    STORAGE_ALLOWED_LOCATIONS = ('s3://ivanmnlw-project-s3-snowflake/topics/project-topic/partition=0/');
+
+DESC integration s3_snowpipe_int_pro;
+
+// Create file format
+CREATE OR REPLACE FILE FORMAT json_format
+TYPE = 'JSON';
+
+// Create staging
+CREATE OR REPLACE STAGE s3_snowpipe_stage_pro
+    STORAGE_INTEGRATION = s3_snowpipe_int_pro
+    URL = 's3://ivanmnlw-project-s3-snowflake/topics/project-topic/partition=0/'
+    FILE_FORMAT = json_format;
+
+list @s3_snowpipe_stage_pro;
+
+// Create snowpipe
+CREATE OR REPLACE pipe s3_pipe_pro
+auto_ingest = true AS 
+COPY INTO TAXI_EVENT
+FROM (
+  SELECT 
+    $1 AS TAXI_EVENT,
+    CURRENT_TIMESTAMP() AS DT_INGESTION_TIMESTAMP
+  FROM @s3_snowpipe_stage_pro
+)
+FILE_FORMAT = (TYPE = 'JSON');
+
+SELECT SYSTEM$PIPE_STATUS('s3_pipe_pro');
+
+SHOW PIPES;
+
+SELECT * FROM TAXI_EVENT;
+
+////////////////      Create role and grant access      /////////////////////
+CREATE OR REPLACE ROLE TAXI_ROLE;
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE TAXI_ROLE;
+GRANT ROLE TAXI_ROLE TO USER ivanmnlw;
+GRANT ALL ON DATABASE TAXI_DB TO ROLE TAXI_ROLE;
+GRANT ALL ON ALL SCHEMAS IN DATABASE TAXI_DB TO ROLE TAXI_ROLE;
+GRANT ALL ON FUTURE SCHEMAS IN DATABASE TAXI_DB TO ROLE TAXI_ROLE;
+GRANT ALL ON ALL TABLES IN SCHEMA TAXI_DB.TAXI_SCHEMA TO ROLE TAXI_ROLE;
+GRANT ALL ON FUTURE TABLES IN SCHEMA TAXI_DB.TAXI_SCHEMA TO ROLE TAXI_ROLE;
+
+USE ROLE TAXI_ROLE;
+
+SELECT * FROM stg_taxi_event;
